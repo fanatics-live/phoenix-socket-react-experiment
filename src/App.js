@@ -126,6 +126,17 @@ function App() {
         }
       ]);
     });
+
+    channel.on("new_notification", payload => {
+      setMessages(prevMessages => [
+        ...prevMessages,
+        {
+          text: payload.content || payload.message || JSON.stringify(payload),
+          type: 'notification',
+          timestamp: new Date()
+        }
+      ]);
+    });
   };
 
   // Function to disconnect from the socket
