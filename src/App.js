@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Socket } from 'phoenix';
 import './App.css';
+import SqsForm from './components/SqsForm';
 
 function App() {
   // State management for the application
@@ -11,7 +12,8 @@ function App() {
   const [authToken, setAuthToken] = useState('');
   const [socketUrl, setSocketUrl] = useState('ws://localhost:4000/socket');
   const [error, setError] = useState(null);
-  
+  const [activeTab, setActiveTab] = useState('phoenix'); // 'phoenix' or 'sqs'
+
   // References to maintain the socket and channel connections
   const socketRef = useRef(null);
   const channelRef = useRef(null);
@@ -38,11 +40,11 @@ function App() {
       const socket = new Socket(socketUrl, {
         params: { auth_token: authToken }
       });
-      
+
       // Initialize the socket connection
       socket.connect();
       socketRef.current = socket;
-      
+
       // Log socket connection events
       socket.onOpen(() => console.log('Socket connection opened'));
       socket.onError((error) => {
@@ -68,59 +70,59 @@ function App() {
     // Get the channel from the socket
     const channel = socket.channel(channelName, {});
     channelRef.current = channel;
-    
+
     // Handle the channel join event
     channel.join()
-      .receive("ok", response => {
-        console.log("Successfully joined channel", response);
-        setConnected(true);
-        setError(null);
-        
-        // Add a system message to indicate successful connection
-        setMessages(prevMessages => [
-          ...prevMessages, 
-          { text: `Connected to ${channelName}`, type: 'system', timestamp: new Date() }
-        ]);
-      })
-      .receive("error", response => {
-        console.error("Failed to join channel", response);
-        setError(`Failed to join channel: ${response.reason || 'Unknown error'}`);
-        setConnected(false);
-      });
+        .receive("ok", response => {
+          console.log("Successfully joined channel", response);
+          setConnected(true);
+          setError(null);
+
+          // Add a system message to indicate successful connection
+          setMessages(prevMessages => [
+            ...prevMessages,
+            { text: `Connected to ${channelName}`, type: 'system', timestamp: new Date() }
+          ]);
+        })
+        .receive("error", response => {
+          console.error("Failed to join channel", response);
+          setError(`Failed to join channel: ${response.reason || 'Unknown error'}`);
+          setConnected(false);
+        });
 
     // Listen for new messages from the server
     channel.on("new_message", payload => {
       console.log("Received new message:", payload);
       setMessages(prevMessages => [
-        ...prevMessages, 
-        { 
-          text: payload.content || payload.message || JSON.stringify(payload), 
-          sender: payload.sender || 'Server', 
-          timestamp: new Date(), 
+        ...prevMessages,
+        {
+          text: payload.content || payload.message || JSON.stringify(payload),
+          sender: payload.sender || 'Server',
+          timestamp: new Date(),
           type: 'received'
         }
       ]);
     });
-    
+
     // Set up other common event listeners
     channel.on("user_joined", payload => {
       setMessages(prevMessages => [
-        ...prevMessages, 
-        { 
-          text: `${payload.username || 'A user'} joined the channel`, 
-          type: 'system', 
-          timestamp: new Date() 
+        ...prevMessages,
+        {
+          text: `${payload.username || 'A user'} joined the channel`,
+          type: 'system',
+          timestamp: new Date()
         }
       ]);
     });
-    
+
     channel.on("user_left", payload => {
       setMessages(prevMessages => [
-        ...prevMessages, 
-        { 
-          text: `${payload.username || 'A user'} left the channel`, 
-          type: 'system', 
-          timestamp: new Date() 
+        ...prevMessages,
+        {
+          text: `${payload.username || 'A user'} left the channel`,
+          type: 'system',
+          timestamp: new Date()
         }
       ]);
     });
@@ -135,10 +137,10 @@ function App() {
       socketRef.current.disconnect();
     }
     setConnected(false);
-    
+
     // Add a system message to indicate disconnection
     setMessages(prevMessages => [
-      ...prevMessages, 
+      ...prevMessages,
       { text: 'Disconnected from server', type: 'system', timestamp: new Date() }
     ]);
   };
@@ -161,85 +163,111 @@ function App() {
   };
 
   return (
-    <div className="app-container">
-      <h1>Phoenix Socket Chat</h1>
-      
-      <div className="connection-panel">
-        <div className="form-group">
-          <label htmlFor="socketUrl">Socket URL:</label>
-          <input
-            type="text"
-            id="socketUrl"
-            value={socketUrl}
-            onChange={(e) => setSocketUrl(e.target.value)}
-            placeholder="ws://localhost:4000/socket"
-          />
-        </div>
-        
-        <div className="form-group">
-          <label htmlFor="authToken">JWT Auth Token:</label>
-          <input
-            type="text"
-            id="authToken"
-            value={authToken}
-            onChange={(e) => setAuthToken(e.target.value)}
-            placeholder="Enter your JWT token"
-          />
-        </div>
-        
-        <div className="form-group">
-          <label htmlFor="channelName">Channel Name:</label>
-          <input
-            type="text"
-            id="channelName"
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
-            placeholder="room:lobby"
-          />
-        </div>
-        
-        <div className="button-group">
-          <button 
-            onClick={connectSocket} 
-            disabled={connected}
-            className={connected ? "disabled" : "connect"}
+      <div className="app-container">
+        <h1>Phoenix Socket & AWS SQS Demo</h1>
+
+        <div className="tab-navigation">
+          <button
+              className={`tab-button ${activeTab === 'phoenix' ? 'active' : ''}`}
+              onClick={() => setActiveTab('phoenix')}
           >
-            Connect
+            Phoenix Socket
           </button>
-          <button 
-            onClick={disconnectSocket} 
-            disabled={!connected}
-            className={!connected ? "disabled" : "disconnect"}
+          <button
+              className={`tab-button ${activeTab === 'sqs' ? 'active' : ''}`}
+              onClick={() => setActiveTab('sqs')}
           >
-            Disconnect
+            AWS SQS
           </button>
         </div>
-        
-        {error && <div className="error-message">{error}</div>}
-        <div className="connection-status">
-          Status: {connected ? 'Connected' : 'Disconnected'}
-        </div>
-      </div>
-      
-      <div className="messages-container">
-        <h2>Messages</h2>
-        <div className="messages-list">
-          {messages.length === 0 ? (
-            <div className="no-messages">No messages yet</div>
-          ) : (
-            messages.map((msg, index) => (
-              <div key={index} className={`message ${msg.type}`}>
-                <div className="message-header">
-                  {msg.sender && <span className="sender">{msg.sender}</span>}
-                  <span className="timestamp">{formatTime(msg.timestamp)}</span>
+
+        {activeTab === 'phoenix' ? (
+            <div className="phoenix-tab">
+              <div className="connection-panel">
+                <div className="form-group">
+                  <label htmlFor="socketUrl">Socket URL:</label>
+                  <input
+                      type="text"
+                      id="socketUrl"
+                      value={socketUrl}
+                      onChange={(e) => setSocketUrl(e.target.value)}
+                      placeholder="ws://localhost:4000/socket"
+                  />
                 </div>
-                <div className="message-content">{msg.text}</div>
+
+                <div className="form-group">
+                  <label htmlFor="authToken">JWT Auth Token:</label>
+                  <input
+                      type="text"
+                      id="authToken"
+                      value={authToken}
+                      onChange={(e) => setAuthToken(e.target.value)}
+                      placeholder="Enter your JWT token"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="channelName">Channel Name:</label>
+                  <input
+                      type="text"
+                      id="channelName"
+                      value={channelName}
+                      onChange={(e) => setChannelName(e.target.value)}
+                      placeholder="room:lobby"
+                  />
+                </div>
+
+                <div className="connection-buttons">
+                  <button
+                      onClick={connectSocket}
+                      disabled={connected}
+                      className={connected ? 'disabled' : ''}
+                  >
+                    Connect
+                  </button>
+                  <button
+                      onClick={disconnectSocket}
+                      disabled={!connected}
+                      className={!connected ? 'disabled' : ''}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+
+                {error && <div className="error-message">{error}</div>}
+
+                <div className="connection-status">
+                  Status: <span className={connected ? 'connected' : 'disconnected'}>
+                {connected ? 'Connected' : 'Disconnected'}
+              </span>
+                </div>
               </div>
-            ))
-          )}
-        </div>
+
+              <div className="messages-container">
+                <h2>Messages</h2>
+                <div className="messages-list">
+                  {messages.length === 0 ? (
+                      <div className="no-messages">No messages yet</div>
+                  ) : (
+                      messages.map((msg, index) => (
+                          <div key={index} className={`message ${msg.type}`}>
+                            <div className="message-header">
+                              {msg.sender && <span className="sender">{msg.sender}</span>}
+                              <span className="timestamp">{formatTime(msg.timestamp)}</span>
+                            </div>
+                            <div className="message-content">{msg.text}</div>
+                          </div>
+                      ))
+                  )}
+                </div>
+              </div>
+            </div>
+        ) : (
+            <div className="sqs-tab">
+              <SqsForm />
+            </div>
+        )}
       </div>
-    </div>
   );
 }
 
