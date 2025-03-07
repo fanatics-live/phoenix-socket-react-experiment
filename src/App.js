@@ -8,7 +8,7 @@ function App() {
   // State management for the application
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [channelName, setChannelName] = useState('global_auctions:me');
+  const [channelName, setChannelName] = useState('global_auctions:all');
   const [authToken, setAuthToken] = useState('');
   const [socketUrl, setSocketUrl] = useState('ws://localhost:5004/auctions');
   const [error, setError] = useState(null);
@@ -20,11 +20,6 @@ function App() {
 
   // Function to establish a connection to the Phoenix socket server
   const connectSocket = () => {
-    if (!authToken) {
-      setError('Please provide an authentication token');
-      return;
-    }
-
     if (!socketUrl) {
       setError('Please provide a socket URL');
       return;
@@ -36,9 +31,15 @@ function App() {
         socketRef.current.disconnect();
       }
 
-      // Create a new socket connection with authentication
+      // Create socket params object - only include auth_token if it's provided
+      const socketParams = {};
+      if (authToken) {
+        socketParams.auth_token = authToken;
+      }
+
+      // Create a new socket connection with authentication if token is provided
       const socket = new Socket(socketUrl, {
-        params: { auth_token: authToken }
+        params: socketParams
       });
 
       // Initialize the socket connection
@@ -128,11 +129,38 @@ function App() {
     });
 
     channel.on("new_notification", payload => {
+      // Format JSON payload for better readability
+      const formattedText = typeof payload === 'object' ? (
+        <>
+          <div className="message-type-header">New Notification</div>
+          <pre>{JSON.stringify(payload, null, 2)}</pre>
+        </>
+      ) : payload.content || payload.message || String(payload);
+      
       setMessages(prevMessages => [
         ...prevMessages,
         {
-          text: payload.content || payload.message || JSON.stringify(payload),
+          text: formattedText,
           type: 'notification',
+          timestamp: new Date()
+        }
+      ]);
+    });
+
+    channel.on("last_update", payload => {
+      // Format JSON payload for better readability
+      const formattedText = typeof payload === 'object' ? (
+        <>
+          <div className="message-type-header">Last Update</div>
+          <pre>{JSON.stringify(payload, null, 2)}</pre>
+        </>
+      ) : payload.content || payload.message || String(payload);
+      
+      setMessages(prevMessages => [
+        ...prevMessages,
+        {
+          text: formattedText,
+          type: 'update',
           timestamp: new Date()
         }
       ]);
@@ -202,18 +230,18 @@ function App() {
                       id="socketUrl"
                       value={socketUrl}
                       onChange={(e) => setSocketUrl(e.target.value)}
-                      placeholder="ws://localhost:4000/socket"
+                      placeholder="ws://localhost:5004/auctions"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="authToken">JWT Auth Token:</label>
+                  <label htmlFor="authToken">JWT Auth Token (optional):</label>
                   <input
                       type="text"
                       id="authToken"
                       value={authToken}
                       onChange={(e) => setAuthToken(e.target.value)}
-                      placeholder="Enter your JWT token"
+                      placeholder="Enter your JWT token (optional)"
                   />
                 </div>
 
