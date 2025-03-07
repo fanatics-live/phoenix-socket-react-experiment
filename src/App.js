@@ -8,9 +8,9 @@ function App() {
   // State management for the application
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [channelName, setChannelName] = useState('room:lobby');
+  const [channelName, setChannelName] = useState('global_auctions:me');
   const [authToken, setAuthToken] = useState('');
-  const [socketUrl, setSocketUrl] = useState('ws://localhost:4000/socket');
+  const [socketUrl, setSocketUrl] = useState('ws://localhost:5004/auctions');
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('phoenix'); // 'phoenix' or 'sqs'
 
